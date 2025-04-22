@@ -1,0 +1,61 @@
+{
+  "Comment": "ETL and Forecasting Pipeline",
+  "StartAt": "Data",
+  "States": {
+    "Data": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::glue:startJobRun.sync",
+      "Parameters": {
+        "JobName": "MyETLJob"
+      },
+      "Next": "Forecasting"
+    },
+    "Forecasting": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sagemaker:createTrainingJob.sync",
+      "Parameters": {
+        "TrainingJobName": "forecast-job",
+        "AlgorithmSpecification": {
+          "TrainingImage": "382416733822.dkr.ecr.us-east-1.amazonaws.com/linear-learner:latest",
+          "TrainingInputMode": "File"
+        },
+        "RoleArn": "arn:aws:iam::339712984267:role/LabRole/AmazonSageMaker-ExecutionRole-20200101T000001",
+        "InputDataConfig": [
+          {
+            "ChannelName": "train",
+            "DataSource": {
+              "S3DataSource": {
+                "S3DataType": "S3Prefix",
+                "S3Uri": "s3://my-forecasting-data-lake/dataset.csv",
+                "S3DataDistributionType": "FullyReplicated"
+              }
+            },
+            "ContentType": "text/csv"
+          }
+        ],
+        "OutputDataConfig": {
+          "S3OutputPath": "s3://my-forecasting-data-lake/transformed data/"
+        },
+        "ResourceConfig": {
+          "InstanceType": "ml.m4.xlarge",
+          "InstanceCount": 1,
+          "VolumeSizeInGB": 10
+        },
+        "StoppingCondition": {
+          "MaxRuntimeInSeconds": 3600
+        }
+      },
+      "Next": "Notify"
+    },
+    "Notify": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:339712984267:forecast-notify",
+        "Message": "Success",
+        "Subject": "End"
+      },
+      "End": true
+    }
+  }
+}
