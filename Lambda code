@@ -1,0 +1,44 @@
+import json
+import requests
+import boto3
+import uuid
+
+def lambda_handler(event, context):
+
+    region = event.get('region')
+    dataset_key = event.get('dataset_key')
+    bucket_name = event.get('bucket_name')
+    
+    if not all([region, dataset_key, bucket_name]):
+        return {
+            'statusCode': 400,
+            'body': json.dumps('Missing required parameters')
+        }
+
+    ec2_api_url = "http://34.228.26.7:5000/predict"  
+
+    payload = {
+        'region': region,
+        'dataset_key': dataset_key,
+        'bucket_name': bucket_name
+    }
+
+    try:
+        response = requests.post(ec2_api_url, json=payload)
+        response.raise_for_status()  
+        result = response.json()
+    except requests.exceptions.RequestException as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps(f'Error contacting EC2: {str(e)}')
+        }
+
+    s3 = boto3.client('s3')
+    file_name = f"predictions/output_{uuid.uuid4()}.json"
+    s3.put_object(Bucket=bucket_name, Key=file_name, Body=json.dumps(result))
+
+    return {
+        'statusCode': 200,
+        'output_key': f"s3://{bucket_name}/{file_name}",
+        'predictions': result.get('predictions', [])
+    }
